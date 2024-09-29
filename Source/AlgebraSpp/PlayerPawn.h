@@ -83,13 +83,14 @@ private:
 			TArray<TSharedPtr<FormulaUnit>> processedFormula; 
 			processedFormula = combineValues(formulaArray);
 			TSharedPtr<FormulaUnit> root = buildBracketHierarchy(processedFormula);
-			sortVariables(root);
+			sortImplicitMultiplications(root);
 			sortOperatorType(root, UnitType::Exponentiation);
 			sortOperatorType(root, UnitType::Division);
 			sortOperatorType(root, UnitType::Multiplication);
 			sortOperatorType(root, UnitType::Subtraction);
 			sortOperatorType(root, UnitType::Addition);
 
+			formulaRoot = root;
 			if (processedFormula.Num() > 10) {
 				int a = 0;
 			}
@@ -141,20 +142,25 @@ private:
 			container->addChild(originalUnit);
 		}
 
-		void sortVariables(TSharedPtr<FormulaUnit>& container) {
+		void sortImplicitMultiplications(TSharedPtr<FormulaUnit>& container) {
 			TArray<TSharedPtr<FormulaUnit>> result;
 			const int num = container->children.Num();
 			for (auto& unit : container->children) {
 				if (unit->type == UnitType::Container) {
-					sortVariables(unit);
+					sortImplicitMultiplications(unit);
 				}
-				if (unit->type == UnitType::Variable && result.Num() > 0) {
-					auto& last = result.Last();
-					if (last->type == UnitType::Value || last->type == UnitType::Variable) {
-						containerize(last, UnitType::Multiplication);
-						last->addChild(unit);
-					}
-					else if (last->type == UnitType::Multiplication) {
+				if (result.Num() == 0) {
+					result.Push(unit);
+					continue;
+				}
+
+				auto& last = result.Last();
+				if (unit->type == UnitType::Variable || last->type == UnitType::Container || unit->type == UnitType::Container) {
+					if (last->type == UnitType::Value || last->type == UnitType::Variable
+						|| unit->type == UnitType::Container || last->type == UnitType::Container) {
+						if (last->type != UnitType::Multiplication) {
+							containerize(last, UnitType::Multiplication);
+						}
 						last->addChild(unit);
 					}
 					else {
@@ -172,7 +178,7 @@ private:
 			TArray<TSharedPtr<FormulaUnit>> result;
 			bool lastIsType = false;
 			for (auto& unit : container->children) {
-				if (unit->type == UnitType::Container) {
+				if (unit->children.Num() > 0) {
 					sortOperatorType(unit, type);
 				}
 				if (result.Num() == 0) {
@@ -205,7 +211,6 @@ private:
 		}
 
 		FormulaTree() {
-			formulaRoot = MakeUnique<FormulaUnit>(UnitType::Container);
 		}
 
 		~FormulaTree() {
@@ -213,19 +218,26 @@ private:
 
 		void print() {
 			FString string = "";
-			//print(formulaRoot, string);
+			print(formulaRoot, string);
 			UE_LOG(LogTemp, Warning, TEXT("%s"), *string);
 		}
 
-		void print(TSharedPtr<FormulaUnit> unit, FString& string) {
+		void print(TSharedPtr<FormulaUnit>& unit, FString& string) {
 
 			if (unit->type == UnitType::Container) string += "(";
 
-			for (TSharedPtr<FormulaUnit> child : unit->children) {
+
+			for (int i = 0; i < unit->children.Num(); ++i) {
+				auto& child = unit->children[i];
 				print(child, string);
-				if (unit->type == UnitType::Addition) string += "+";
-				else if (unit->type == UnitType::Multiplication) string += "*";
-				else string += "?";
+				if (i < unit->children.Num() - 1) {
+					if (unit->type == UnitType::Addition) string += "+";
+					else if (unit->type == UnitType::Multiplication) string += "*";
+					else if (unit->type == UnitType::Subtraction) string += "-";
+					else if (unit->type == UnitType::Division) string += "/";
+					else if (unit->type == UnitType::Exponentiation) string += "^";
+					else string += "?";
+				}
 			}
 
 			if (unit->type == UnitType::Value || unit->type == UnitType::Variable) {
@@ -235,9 +247,11 @@ private:
 		}
 
 	private:
-		TUniquePtr<FormulaUnit> formulaRoot;
+		TSharedPtr<FormulaUnit> formulaRoot;
 		TArray<TSharedPtr<FormulaUnit>> formulaArray;
 	};
 
-	FormulaTree formulaTree;
+	bool editingRight;
+	FormulaTree formulaTreeLeft;
+	FormulaTree formulaTreeRight;
 };

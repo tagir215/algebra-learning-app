@@ -75,6 +75,8 @@ FString APlayerPawn::ProcessKey(FText KeyName)
 	else if (Key.Equals("Space Bar")) {
 		Key = "=";
 		unit->isOperator = true;
+		editingRight = true;
+		return Key;
 	}
 
 	if (Key.Len() > 1) return "";
@@ -89,8 +91,17 @@ FString APlayerPawn::ProcessKey(FText KeyName)
 	}
 
 	unit->index = currentIndex++;
-	formulaTree.addUnit(unit);
-	formulaTree.print();
+
+
+	if (editingRight) {
+		formulaTreeRight.addUnit(unit);
+		formulaTreeRight.print();
+	}
+	else {
+		formulaTreeLeft.addUnit(unit);
+		formulaTreeLeft.print();
+	}
+
 
 	return Key;
 }
